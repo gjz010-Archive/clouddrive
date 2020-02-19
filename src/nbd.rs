@@ -2,12 +2,18 @@ use tokio::prelude::*;
 use std::error::Error;
 use std::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
 use std::mem::MaybeUninit;
+use crate::support::{CloudProvider, SharedProvider};
+use std::sync::Arc;
+use std::collections::BTreeMap;
 
 const NBDMAGIC:u64=0x4e42444d41474943;
 const IHAVEOPT:u64=0x49484156454F5054;
 const HANDSHAKE_FLAGS:u16=1; // Does not support NBD_FLAG_NO_ZEROES
 const REPLY_OPT:u64=0x3e889045565a9;
+
+pub const PREFERRED_BLOCK_SIZE:usize=4096;
 
 const NBD_OPT_EXPORT_NAME:u32=1;
 const NBD_OPT_ABORT:u32=2;
@@ -42,7 +48,8 @@ const NBD_FLAG_SEND_FAST_ZERO:u16=1<<11;
 enum NBDError {
     ClientFlagsError,
     ClientOptionsError,
-    BadExportError
+    BadExportError,
+    Abort
 }
 
 // Generation of an error is completely separate from how it is displayed.
@@ -122,7 +129,7 @@ async fn write_nbd_export_item<T: AsyncWrite + Unpin>(stream: &mut T, reply: Exp
 }
 
 
-pub async fn handshake<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, export: ExportDescriptor)->Result<(), Box<dyn Error>>{
+pub async fn handshake<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, exports: BTreeMap<String, Arc<dyn SharedProvider>>)->Result<(), Box<dyn Error>>{
     stream.write_u64(NBDMAGIC).await?;
     stream.write_u64(IHAVEOPT).await?;
     stream.write_u16(HANDSHAKE_FLAGS).await?;
@@ -135,8 +142,11 @@ pub async fn handshake<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, export: Ex
         let option=read_nbd_client_option(stream).await?;
         match option.option{
             NBD_OPT_EXPORT_NAME=>{
-                if export.name == (String::from_utf8(Vec::clone(&option.data))?){
-                    write_nbd_export_item(stream, ExportItem {size: export.size, transmission_flags: NBD_FLAG_HAS_FLAGS|NBD_FLAG_SEND_FLUSH|NBD_FLAG_SEND_FUA|NBD_FLAG_SEND_CACHE}).await?;
+                let name=String::from_utf8(Vec::clone(&option.data))?;
+                if let Some(provider)=exports.get(&name){
+                    write_nbd_export_item(stream, ExportItem {size: provider.total_size() as u64, transmission_flags: NBD_FLAG_HAS_FLAGS|NBD_FLAG_SEND_FLUSH|NBD_FLAG_SEND_FUA|NBD_FLAG_SEND_CACHE}).await?;
+                    stream.flush().await?;
+                    break;
                 }else{
                     return Err(NBDError::BadExportError)?;
                 }
@@ -144,12 +154,15 @@ pub async fn handshake<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, export: Ex
             }
             NBD_OPT_ABORT=>{
                 write_nbd_option_reply(stream, OptionReply{option: NBD_OPT_ABORT, reply_type: NBD_REP_ACK, data: Vec::new()}).await?;
+                stream.flush().await?;
+                return Err(NBDError::Abort)?;
             }
             _=>{
                 write_nbd_option_reply(stream, OptionReply {option: option.option, reply_type: NBD_REP_ERR_UNSUP, data: Vec::new()}).await?;
+                stream.flush().await?;
             }
         }
-        stream.flush().await?;
+
     }
     Ok(())
 }
