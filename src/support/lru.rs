@@ -90,7 +90,7 @@ impl<T: CloudProvider> CloudProvider for LRUProvider<T>{
                         self.provider.unsafe_write_block(evicted_id, &evicted_item.data, false).await?;
                     }
                 }
-                let mut lruitem=LRUItem {data: buffer, dirty: false};
+                let lruitem=LRUItem {data: buffer, dirty: false};
                 self.cache.put(*block_id, lruitem);
             }
 

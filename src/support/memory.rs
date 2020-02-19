@@ -1,5 +1,7 @@
 use tokio::sync::RwLock;
 use async_trait::async_trait;
+use std::mem::MaybeUninit;
+
 pub struct MemoryProvider{
     size: usize,
     content: Vec<u8>
@@ -7,8 +9,15 @@ pub struct MemoryProvider{
 
 impl MemoryProvider {
     pub fn new(size: usize)->MemoryProvider{
+        let data={
+            let mut d=Vec::with_capacity(size);
+            unsafe {d.set_len(size);}
+            d
+        };
+        /*
         let mut data=Vec::new();
-        data.resize(size, 0);
+        data.resize(size, unsafe {MaybeUninit::uninit().assume_init()});
+        */
         MemoryProvider{
             size,
             content: data

@@ -10,6 +10,9 @@ pub struct ByteGranularityProvider<T: CloudProvider>{
     provider: T
 }
 impl<T: CloudProvider> ByteGranularityProvider<T>{
+    pub fn new(provider: T)->Self{
+        ByteGranularityProvider{provider}
+    }
     fn underlying_block_size(&self)->usize{
         self.provider.block_size()
     }
