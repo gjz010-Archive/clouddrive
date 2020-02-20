@@ -6,11 +6,13 @@ use async_trait::async_trait;
 mod lru;
 mod memory;
 mod byte;
+pub mod seafile;
 use std::ops::DerefMut;
 
 pub use self::byte::ByteGranularityProvider;
 pub use self::lru::LRUProvider;
 pub use self::memory::MemoryProvider;
+pub use self::seafile::SeafileProvider;
 pub fn bound_and_align_check(block_size: usize, total_size: usize, offset: usize, size: usize)->bool{
     if offset%block_size!=0 || size%block_size!=0 {
         return false;

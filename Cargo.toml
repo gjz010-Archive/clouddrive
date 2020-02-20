@@ -10,3 +10,7 @@ edition = "2018"
 tokio = { version = "0.2", features = ["full"] }
 lru = "*"
 async-trait = "*"
+reqwest = { version = "0.10", features = ["json"] }
+lazy_static = "*"
+bytes = "*"
+multipart = "*"

@@ -167,7 +167,7 @@ pub async fn handshake<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, exports: &
                 println!("NBD_OPT_EXPORT_NAME");
                 let name=String::from_utf8(Vec::clone(&option.data))?;
                 if let Some(provider)=exports.get(&name){
-                    write_nbd_export_item(stream, ExportItem {size: provider.lock().await.total_size() as u64, transmission_flags: NBD_FLAG_HAS_FLAGS|NBD_FLAG_SEND_FLUSH|NBD_FLAG_SEND_FUA}).await?;
+                    write_nbd_export_item(stream, ExportItem {size: provider.lock().await.total_size() as u64, transmission_flags: NBD_FLAG_HAS_FLAGS|NBD_FLAG_SEND_FLUSH}).await?;
                     stream.flush().await?;
                     return Ok(Arc::clone(provider));
                 }else{
@@ -276,10 +276,11 @@ pub async fn handle_packet<T: AsyncRead+AsyncWrite+Unpin>(stream: &mut T, provid
                 }else if (req.offset as usize) % block_size!=0 || (req.length as usize) % block_size!=0{
                     TransmissionSimpleResponse{error: NBD_EINVAL, handle: req.handle, data: None}.write_to(stream).await?;
                 }else{
-                    let fua_write_through=(req.flags|NBD_CMD_FLAG_FUA) >0;
+                    let fua_write_through=(req.flags&NBD_CMD_FLAG_FUA) >0;
                     if req.length==0{
                         TransmissionSimpleResponse{error: NBD_EINVAL, handle: req.handle, data: None}.write_to(stream).await?;
                     }else{
+                        println!("Write offset={} len={} fua={}", req.offset, req.length, fua_write_through);
                         match provider.write(req.offset as usize, req.data.as_ref().unwrap(), fua_write_through).await{
                             Ok(())=>{
                                 TransmissionSimpleResponse{error: 0, handle: req.handle, data: None}.write_to(stream).await?;

@@ -21,6 +21,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let providers={
         let mut providers: BTreeMap<String, Arc<Mutex<Box<dyn CloudProvider>>>>=BTreeMap::new();
         providers.insert(String::from("memory"), Arc::new(Mutex::new(Box::new(ByteGranularityProvider::new(LRUProvider::new(MemoryProvider::new(1*1024*1024*1024), 1024))))));
+        providers.insert(String::from("seafile"), Arc::new(Mutex::new(Box::new(
+            ByteGranularityProvider::new(
+                LRUProvider::new(
+                    SeafileProvider::connect(&std::env::var("SEAFILE_TOKEN").expect("SEAFILE_TOKEN missing!"), &std::env::var("SEAFILE_LIBRARY").expect("SEAFILE_LIBRARY missing!"), 1*1024*1024*1024).await?
+                    ,1024*1024
+                )
+            )
+        ))));
+
         Arc::new(providers)
     };
     println!("CloudDrive Started!");
